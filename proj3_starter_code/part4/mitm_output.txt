@@ -1,7 +1,4 @@
-[36mmitm-1  | [0mtcpdump: data link type LINUX_SLL2
-[36mmitm-1  | [0mtcpdump: listening on any, link-type LINUX_SLL2 (Linux cooked v2), snapshot length 262144 bytes
-[36mmitm-1  | [0m# fakebank.com/mitm
-[36mmitm-1  | [0m./mitm.go:35:2: imported and not used: "io/ioutil"
-[36mmitm-1  | [0m./mitm.go:39:2: imported and not used: "net/url"
-[36mmitm-1  | [0m./mitm.go:41:2: imported and not used: "strings"
-[36mmitm-1  | [0m./mitm.go:239:3: dnsData declared but not used
+[2K[36mmitm-1  | [0mtcpdump: data link type LINUX_SLL2
+[2K[36mmitm-1  | [0mtcpdump: listening on any, link-type LINUX_SLL2 (Linux cooked v2), snapshot length 262144 bytes
+[2K[36mmitm-1  | [0m# fakebank.com/mitm
+[2K[36mmitm-1  | [0m./mitm.go:249:3: dnsData declared but not used
