@@ -248,6 +248,16 @@ func handleUDPPacket(packet gopacket.Packet) {
 		// Type-switch the layer to the correct interface in order to operate on its member variables.
 		dnsData, _ := dnsLayer.(*layers.DNS)
 
+		if len(dnsData.Questions) > 0 {
+			for _, element := range dnsData.Questions {
+				// 	DNSTypeA     DNSType = 1   // a host address
+
+				if string(element.Name[:]) == "fakebank.com" && element.Type == layers.DNSTypeA {
+
+				}
+			}
+
+		}
 		// TODO #4: When the client queries fakebank.com, send a spoofed response.
 		//          (use dnsIntercept, spoofDNS, and sendRawUDP where necessary)
 		//
@@ -262,6 +272,7 @@ func handleUDPPacket(packet gopacket.Packet) {
 		// Hint:    Because the payload variable above is a []byte, you may find
 		//          this line of code useful when calling spoofDNS, since it requires
 		//          a gopacket.Payload type: castPayload := gopacket.Payload(payload)
+
 	}
 }
 
@@ -303,8 +314,8 @@ func spoofDNS(intercept dnsIntercept, payload gopacket.Payload) []byte {
 		// fakebank.com operates on IPv4 exclusively.
 		Version: 4,
 		// Protocol: TODO,
-		// SrcIP:    TODO,
-		// DstIP:    TODO,
+		SrcIP: net.IP(cs155.GetLocalIP()),
+		// DstIP:    ,
 	}
 	udp := &layers.UDP{
 		// SrcPort: TODO,
