@@ -1,4 +1,5 @@
-[2K[36mmitm-1  | [0mtcpdump: data link type LINUX_SLL2
-[2K[36mmitm-1  | [0mtcpdump: listening on any, link-type LINUX_SLL2 (Linux cooked v2), snapshot length 262144 bytes
-[2K[36mmitm-1  | [0m# fakebank.com/mitm
-[2K[36mmitm-1  | [0m./mitm.go:249:3: dnsData declared but not used
+[36mmitm-1  | [0mtcpdump: data link type LINUX_SLL2
+[36mmitm-1  | [0mtcpdump: listening on any, link-type LINUX_SLL2 (Linux cooked v2), snapshot length 262144 bytes
+[36mmitm-1  | [0m10.38.8.2
+[36mmitm-1  | [0mdstip10.38.8.2
+[36mmitm-1  | [0mdstip10.38.8.2

